@@ -1,0 +1,453 @@
+# 🤖 LOCUS — IA Jurídica e Inteligência Tributária
+> Versão 1.0 | LLM + RAG + Motor de Regras Tributárias
+
+---
+
+## 1. Visão Geral do Módulo de IA
+
+O módulo de IA é o **diferencial de retenção (stickiness)** do Locus. Uma vez que o usuário usa o sistema para gerar contratos, declarar impostos e entender sua situação jurídica, a dependência é alta e o churn cai drasticamente.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     AI SERVICE — ARQUITETURA                         │
+│                                                                       │
+│  ┌────────────────┐    ┌──────────────────┐    ┌──────────────────┐ │
+│  │   LLM Engine   │    │   Knowledge Base  │    │  Rules Engine    │ │
+│  │                │    │   (RAG / Vector)  │    │  (Tax / Legal)   │ │
+│  │  Claude API /  │    │                  │    │                  │ │
+│  │  OpenAI API    │    │  Contratos       │    │  MEI rules       │ │
+│  │  (fallback)    │    │  validados       │    │  LTDA rules      │ │
+│  │                │    │                  │    │  CLT vs PJ       │ │
+│  │  Temperatura:  │    │  Legislação BR   │    │  Simples Nacional│ │
+│  │  0.3 (jurídico)│    │  atualizada      │    │  Tabela INSS     │ │
+│  │  0.7 (guias)   │    │                  │    │  Tabela IRPF     │ │
+│  └───────┬────────┘    └────────┬─────────┘    └────────┬─────────┘ │
+│          │                      │                        │           │
+│          └──────────────────────▼────────────────────────┘           │
+│                         ORCHESTRATION LAYER                           │
+│                         (LangChain / Custom)                          │
+│                                │                                      │
+│                                ▼                                      │
+│                      PROMPT ENGINEERING LAYER                         │
+│                      Contexto do usuário (MEI/LTDA/PF)               │
+│                      Nicho (tráfego, design, vídeo...)               │
+│                      Histórico financeiro do tenant                   │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 2. Geração de Contratos — IA Jurídica
+
+### 2.1 Fluxo de Geração
+
+```
+PRESTADOR solicita contrato
+          │
+          ▼
+┌─────────────────────────────────────┐
+│  1. Coleta de contexto (formulário) │
+│                                     │
+│  - Tipo de serviço (nicho)          │
+│  - Tipo jurídico (MEI/PJ/PF)        │
+│  - Valor do contrato                │
+│  - Prazo de entrega                 │
+│  - Número de revisões               │
+│  - Política de pagamento            │
+│  - Cláusulas especiais              │
+└───────────────┬─────────────────────┘
+                │
+                ▼
+┌─────────────────────────────────────┐
+│  2. Template RAG Query              │
+│                                     │
+│  Busca vetorialmente os contratos   │
+│  mais similares na base:            │
+│  - Mesmo nicho                      │
+│  - Mesma estrutura jurídica         │
+│  - Aprovados por advogados          │
+│                                     │
+│  Vector DB: Pinecone / Qdrant       │
+│  Embedding: text-embedding-3-small  │
+└───────────────┬─────────────────────┘
+                │
+                ▼
+┌─────────────────────────────────────┐
+│  3. Prompt Construction             │
+│                                     │
+│  SYSTEM:                            │
+│  "Você é um advogado especialista   │
+│  em direito digital brasileiro.     │
+│  Crie contratos juridicamente       │
+│  seguros com base nos templates     │
+│  validados abaixo: {context}"       │
+│                                     │
+│  USER:                              │
+│  "Gere um contrato de [NICHO] para  │
+│  [TIPO_PJ], valor [R$], prazo       │
+│  [DIAS], revisões [N]..."           │
+└───────────────┬─────────────────────┘
+                │
+                ▼
+┌─────────────────────────────────────┐
+│  4. LLM Gera Contrato               │
+│     Temperatura: 0.3                │
+│     (conservador/jurídico)          │
+│                                     │
+│  Saída: Markdown estruturado        │
+│  convertido para PDF/DOCX           │
+└───────────────┬─────────────────────┘
+                │
+                ▼
+┌─────────────────────────────────────┐
+│  5. Validação de Qualidade          │
+│                                     │
+│  Checklist automático:              │
+│  ✅ Cláusula de pagamento presente  │
+│  ✅ Prazo definido                  │
+│  ✅ Propriedade intelectual         │
+│  ✅ Cláusula de sigilo              │
+│  ✅ Foro competente (BR)            │
+│  ✅ Multa por inadimplência         │
+│                                     │
+│  Se faltar → solicita regeneração   │
+└───────────────┬─────────────────────┘
+                │
+                ▼
+┌─────────────────────────────────────┐
+│  6. Salva no banco                  │
+│  contracts.content (criptografado)  │
+│  contracts.template_id              │
+│  contracts.ai_generated = true      │
+│                                     │
+│  Disponibiliza para assinatura      │
+│  digital dentro da plataforma       │
+└─────────────────────────────────────┘
+```
+
+### 2.2 Nichos Suportados (Templates Pré-Validados)
+
+```
+┌────────────────────────────────────────────────────────┐
+│              BIBLIOTECA DE CONTRATOS LOCUS              │
+│                                                          │
+│  📱 Gestão de Tráfego Pago                             │
+│     - Meta Ads / Google Ads / TikTok Ads               │
+│     - Cláusulas específicas de verba de mídia           │
+│                                                          │
+│  🎬 Produção de Vídeo / Edição                         │
+│     - Direitos de uso de imagem                         │
+│     - Propriedade intelectual de trilhas                │
+│                                                          │
+│  🎨 Design Gráfico / Identidade Visual                  │
+│     - Cessão de direitos autorais                       │
+│     - Licença de uso vs. exclusividade                  │
+│                                                          │
+│  💻 Desenvolvimento Web / Software                      │
+│     - Propriedade do código                             │
+│     - SLA e manutenção                                  │
+│                                                          │
+│  📝 Social Media / Copy / Conteúdo                      │
+│     - Direitos de republicação                          │
+│     - Confidencialidade de marca                        │
+│                                                          │
+│  📊 Consultoria / Mentoria                              │
+│     - Disclaimer de resultados                          │
+│     - Cláusula de não concorrência                      │
+└────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 3. Assinatura Digital
+
+```
+PRESTADOR envia contrato para cliente
+              │
+              ▼
+┌──────────────────────────────────────────────────────┐
+│  Contrato gerado → PDF com hash SHA-256              │
+│  Link enviado ao cliente por email                    │
+└──────────────────────┬───────────────────────────────┘
+                        │
+                        ▼
+CLIENTE acessa link seguro (token único, TTL 7 dias)
+                        │
+                        ▼
+┌──────────────────────────────────────────────────────┐
+│  Coleta de Dados para Validade Jurídica:             │
+│  - IP do signatário                                   │
+│  - User Agent / dispositivo                           │
+│  - Geolocalização aproximada                         │
+│  - Timestamp UTC                                      │
+│  - E-mail verificado do signatário                   │
+└──────────────────────┬───────────────────────────────┘
+                        │
+                        ▼
+┌──────────────────────────────────────────────────────┐
+│  CLIENTE clica "Concordo e Assino"                   │
+│                                                        │
+│  Gera:                                               │
+│  signature_hash = HMAC-SHA256(                       │
+│    contract_content +                                │
+│    signer_email +                                    │
+│    timestamp +                                        │
+│    ip_address,                                       │
+│    secret_key                                        │
+│  )                                                   │
+│                                                        │
+│  Salva: contracts.signature_hash                     │
+│         contracts.signed_at                          │
+│         contracts.signer_metadata {}                 │
+└──────────────────────┬───────────────────────────────┘
+                        │
+                        ▼
+┌──────────────────────────────────────────────────────┐
+│  PDF final gerado com:                               │
+│  - Conteúdo do contrato                              │
+│  - Página de rodapé com hash, IP, data, e-mail      │
+│  - QR Code de verificação de autenticidade           │
+└──────────────────────────────────────────────────────┘
+```
+
+> **Validade Jurídica:** Baseada na Lei 14.063/2020 (assinatura eletrônica no Brasil). Para máxima segurança jurídica, integração futura com ICP-Brasil (assinatura digital avançada).
+
+---
+
+## 4. Motor de Inteligência Tributária
+
+### 4.1 Cálculo Automático de Impostos
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    MOTOR TRIBUTÁRIO LOCUS                            │
+│                                                                       │
+│  ENTRADA (coletado do perfil do tenant):                             │
+│  - Tipo jurídico: MEI / Simples Nacional LTDA / Lucro Presumido     │
+│  - CNAE principal                                                    │
+│  - Faturamento mensal (acumulado do ano)                             │
+│  - Estado de operação                                                │
+│  - Tipo de serviço                                                   │
+│                                                                       │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │                    RULES ENGINE                               │    │
+│  │                                                               │    │
+│  │  if tipo == 'MEI':                                           │    │
+│  │    DAS mensal = valor fixo por atividade                     │    │
+│  │    limite_anual = R$ 81.000                                  │    │
+│  │    alerta se faturamento > 80% do limite                     │    │
+│  │                                                               │    │
+│  │  if tipo == 'simples_nacional':                              │    │
+│  │    aliquota = lookup_table(faturamento_12m, atividade)       │    │
+│  │    imposto = faturamento_mes × aliquota - deducao           │    │
+│  │    parcelas: IRPJ, CSLL, COFINS, PIS, CPP, ISS/IPI          │    │
+│  │                                                               │    │
+│  │  if tipo == 'lucro_presumido':                               │    │
+│  │    base_IR = faturamento × percentual_atividade              │    │
+│  │    IRPJ = base_IR × 15% (+ 10% se > R$20k/mês)             │    │
+│  │    CSLL = base_IR × 9%                                       │    │
+│  │    + PIS 0.65% + COFINS 3% + ISS (municipal)                │    │
+│  │                                                               │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                       │
+│  SAÍDA: Guia simplificada mensal                                     │
+│  - Valor a pagar por imposto                                         │
+│  - Data de vencimento                                                │
+│  - Código de barras / QR Code do DAS                                │
+│  - Alerta de limites de enquadramento                               │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 4.2 Tabelas Tributárias (Simples Nacional — Serviços)
+
+```
+ANEXO III — SERVIÇOS (ex: agências, consultoria)
+┌─────────────────────────────────────────────────────┐
+│ Faturamento 12 meses │ Alíquota │ Dedução           │
+├─────────────────────────────────────────────────────┤
+│ Até R$ 180.000       │  6,00%   │  R$      0,00    │
+│ R$ 180.001 - 360k    │ 11,20%   │  R$  9.360,00    │
+│ R$ 360.001 - 720k    │ 13,50%   │  R$ 17.640,00    │
+│ R$ 720.001 - 1,8M    │ 16,00%   │  R$ 35.640,00    │
+│ R$ 1,8M - 3,6M       │ 21,00%   │  R$ 125.640,00   │
+│ R$ 3,6M - 4,8M       │ 33,00%   │  R$ 648.000,00   │
+└─────────────────────────────────────────────────────┘
+
+Fórmula: Alíquota efetiva = (RBT12 × Aliq - PD) / RBT12
+```
+
+### 4.3 Guia de Declaração IA
+
+```
+USUÁRIO clica "Gerar Guia de Declaração"
+              │
+              ▼
+┌──────────────────────────────────────────────────────┐
+│  Sistema coleta do banco:                            │
+│  - Todas transactions do período                     │
+│  - Faturamento bruto por mês                         │
+│  - Despesas registradas (futuro)                     │
+│  - Tipo jurídico e CNAE                              │
+└──────────────────────┬───────────────────────────────┘
+                        │
+                        ▼
+┌──────────────────────────────────────────────────────┐
+│  Prompt para LLM:                                    │
+│                                                        │
+│  "Você é um contador especialista em empresas        │
+│  digitais brasileiras. Com base nos dados abaixo,   │
+│  gere um guia passo-a-passo simples e claro para    │
+│  declaração dos impostos, sem linguagem técnica:    │
+│                                                        │
+│  Tipo: {tipo_juridico}                               │
+│  Faturamento: {faturamento_periodo}                   │
+│  Período: {mes}/{ano}                                │
+│  ..."                                                │
+└──────────────────────┬───────────────────────────────┘
+                        │
+                        ▼
+┌──────────────────────────────────────────────────────┐
+│  GUIA GERADO (exemplo):                              │
+│                                                        │
+│  📋 Sua Declaração — Outubro 2025                   │
+│                                                        │
+│  Você faturou R$ 12.500 este mês.                   │
+│  Seu regime: Simples Nacional (Anexo III)            │
+│                                                        │
+│  ① DAS a pagar: R$ 734,63                           │
+│     Vencimento: 20/11/2025                           │
+│     [Gerar código de barras]                         │
+│                                                        │
+│  ② ISS Municipal: incluso no DAS                    │
+│                                                        │
+│  ③ Atenção: Seu faturamento acumulado                │
+│     em 2025 é R$ 98.400.                            │
+│     Você está a R$ 81.600 do limite da              │
+│     próxima faixa. Consulte um contador.             │
+└──────────────────────────────────────────────────────┘
+```
+
+---
+
+## 5. Diagrama de Caso de Uso — IA Jurídica e Tributária
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│         CASOS DE USO — MÓDULO IA JURÍDICA E TRIBUTÁRIA              │
+└─────────────────────────────────────────────────────────────────────┘
+
+  ┌────────────────┐
+  │   Prestador    │
+  │ (Owner/Admin)  │
+  └───────┬────────┘
+          │
+          ├────────────► Solicitar Geração de Contrato
+          │                  └──► <<include>> Selecionar Nicho
+          │                  └──► <<include>> Preencher Dados
+          │                  └──► <<include>> LLM gera documento
+          │                  └──► <<include>> Validar Checklist
+          │                  └──► <<extend>> Personalizar Cláusulas
+          │
+          ├────────────► Enviar Contrato para Assinatura
+          │                  └──► <<include>> Gerar Token Único
+          │                  └──► <<include>> Enviar Email
+          │
+          ├────────────► Gerar Guia Tributário Mensal
+          │                  └──► <<include>> Calcular impostos
+          │                  └──► <<include>> LLM formata guia
+          │                  └──► <<extend>> Exportar PDF
+          │
+          ├────────────► Verificar Limite de Faturamento
+          │
+          └────────────► Consultar Biblioteca de Templates
+
+
+  ┌────────────────┐
+  │ Cliente Final  │
+  └───────┬────────┘
+          │
+          ├────────────► Acessar Contrato via Link
+          │
+          ├────────────► Ler e Revisar Cláusulas
+          │
+          └────────────► Assinar Digitalmente
+                              └──► <<include>> Coletar IP/UA
+                              └──► <<include>> Gerar Hash
+                              └──► <<include>> Gerar PDF Final
+
+
+  ┌────────────────┐
+  │   Sistema      │
+  │  (automático)  │
+  └───────┬────────┘
+          │
+          ├────────────► Atualizar Tabelas Tributárias (mensal)
+          │
+          ├────────────► Alertar Limite de Enquadramento (MEI)
+          │
+          └────────────► Re-treinar/atualizar base RAG (trimestral)
+```
+
+---
+
+## 6. Segurança e Conformidade Jurídica
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                   CONFORMIDADE E DISCLAIMER                          │
+│                                                                       │
+│  ⚠️  IMPORTANTE                                                       │
+│                                                                       │
+│  Os contratos gerados pela IA Locus são:                            │
+│  ✅ Baseados em templates validados por advogados                    │
+│  ✅ Conformes com a legislação brasileira vigente                    │
+│  ✅ Revisados periodicamente por especialistas                       │
+│                                                                       │
+│  Não substituem:                                                     │
+│  ❌ Consultoria jurídica personalizada                               │
+│  ❌ Assessoria contábil profissional                                 │
+│                                                                       │
+│  O Locus exibe aviso claro ao usuário:                              │
+│  "Este contrato foi gerado por IA com base em                       │
+│   templates validados. Para situações complexas,                    │
+│   consulte um advogado."                                            │
+│                                                                       │
+│  LGPD:                                                              │
+│  - Dados do contrato criptografados em repouso                      │
+│  - Conteúdo não usado para treinar modelos externos                 │
+│  - Direito de exclusão respeitado                                   │
+│  - DPA assinado com provedores de LLM                              │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 7. Infraestrutura do AI Service
+
+```
+AI Service (Python + FastAPI)
+│
+├── /contracts
+│   ├── POST /generate       → Gera contrato via LLM + RAG
+│   ├── POST /validate       → Valida checklist de cláusulas
+│   └── GET  /templates      → Lista templates disponíveis
+│
+├── /tax
+│   ├── POST /calculate      → Calcula impostos do período
+│   ├── POST /guide          → Gera guia com LLM
+│   └── GET  /limits         → Verifica limites de enquadramento
+│
+├── /signatures
+│   ├── POST /send           → Envia para assinatura
+│   ├── GET  /status/:id     → Status da assinatura
+│   └── POST /verify/:hash   → Verifica autenticidade
+│
+└── /embeddings
+    ├── POST /index          → Indexa novo template no Vector DB
+    └── POST /search         → Busca semântica na base
+```
+
+---
+
+*Documentação técnica completa do Projeto Locus — v1.0*
+*Arquivos: 01-BACKEND | 02-DATABASE | 03-AUTHENTICATION | 04-PAYMENTS | 05-AI-LEGAL*
